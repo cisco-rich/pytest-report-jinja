@@ -25,7 +25,10 @@ The plugin provides the following context variables to the templete:
 | ``items`` | list of all test which ran during the testrun | 
 | ``metadata`` | some additional information, including data provided by the ``pytest-metadata`` plugin if installed| 
 | ``testrun`` | information about the testrun itself, such as start time and duration|
+| ``function_test_info`` | information about collected items |
 
 The ``items`` element is an ``OrderedDict`` (order of execution), which keys are the Node-Ids (Tests) and values are the ``report`` objects (startup, execution and teardown) of that test.
+
+The ``function_test_info`` contains dict, which keys are function name and values are object of function.
 
 
