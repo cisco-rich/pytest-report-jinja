@@ -44,6 +44,7 @@ class JinjaReport(object):
         has_rerun = config.pluginmanager.hasplugin('rerunfailures')
         self.rerun = 0 if has_rerun else None
         self.items = OrderedDict()
+        self.function_test_info = {}
         self.testrun_info = {}
 
     def _metadata(self, session):
@@ -95,6 +96,9 @@ class JinjaReport(object):
             self.items[report.nodeid] = []
         self.items[report.nodeid].append(report)
 
+    def pytest_itemcollected(self, item):
+        self.function_test_info[item.function.__name__] = item
+
     def pytest_sessionstart(self, session):
         self.start_time = datetime.now()
         self.testrun_info["Start"] = self.start_time
@@ -121,7 +125,7 @@ class JinjaReport(object):
                 # autoescape=select_autoescape(['html', 'xml'])
             )
             template = jinja.get_template(os.path.basename(self.templatepath))
-            rendered_content = template.render(items=self.items, metadata=self._metadata(session), testrun=self.testrun_info)
+            rendered_content = template.render(items=self.items, metadata=self._metadata(session), testrun=self.testrun_info, function_test_info=self.function_test_info)
 
             with open(self.outputpath, "w", encoding="utf-8") as of:
                 of.write(rendered_content)
