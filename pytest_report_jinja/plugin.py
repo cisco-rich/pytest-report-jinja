@@ -14,14 +14,18 @@ def pytest_addoption(parser):
     group.addoption('--jinja2-output', action='store', dest='jinja2_output',
                     metavar='path', default=None,
                     help='filename of the report output.')
+    group.addoption('--capabilities', action='store', dest='browser_capabilities',
+                    metavar='path', default=None,
+                    help='filename of the browser capabilities.')
 
 def pytest_configure(config):
     templatepath = config.option.jinja2_template
     # TODO- check if the template exists at configure time
     outputpath = config.option.jinja2_output
+    capabilities = config.option.browser_capabilities
     # prevent opening htmlpath on slave nodes (xdist)
     if templatepath and not hasattr(config, 'slaveinput'):
-        config._jinjareport = JinjaReport(templatepath, outputpath, config)
+        config._jinjareport = JinjaReport(templatepath, outputpath, capabilities, config)
         config.pluginmanager.register(config._jinjareport)
 
 def pytest_unconfigure(config):
@@ -32,11 +36,13 @@ def pytest_unconfigure(config):
 
 
 class JinjaReport(object):
-    def __init__(self, template, outputpath, config):
+    def __init__(self, template, outputpath, capabilities, config):
         outputpath = os.path.expanduser(os.path.expandvars(outputpath))
         self.outputpath = os.path.abspath(outputpath)
         templatepath = os.path.expanduser(os.path.expandvars(template))
         self.templatepath = os.path.abspath(templatepath)
+        capabilitiespath = os.path.expanduser(os.path.expandvars(capabilities))
+        self.capabilitiespath = os.path.abspath(capabilitiespath)
         self.config = config
         self.errors = self.failed = 0
         self.passed = self.skipped = 0
@@ -46,6 +52,7 @@ class JinjaReport(object):
         self.items = OrderedDict()
         self.function_test_info = {}
         self.testrun_info = {}
+        self.capabilities = capabilities
 
     def _metadata(self, session):
         mapping = {
@@ -125,7 +132,14 @@ class JinjaReport(object):
                 # autoescape=select_autoescape(['html', 'xml'])
             )
             template = jinja.get_template(os.path.basename(self.templatepath))
-            rendered_content = template.render(items=self.items, metadata=self._metadata(session), testrun=self.testrun_info, function_test_info=self.function_test_info)
+            self.capabilities = json.load(open(self.capabilitiespath))
+            rendered_content = template.render(
+                items=self.items,
+                metadata=self._metadata(session),
+                testrun=self.testrun_info,
+                function_test_info=self.function_test_info,
+                capabilities=self.capabilities
+            )
 
             with open(self.outputpath, "w", encoding="utf-8") as of:
                 of.write(rendered_content)
