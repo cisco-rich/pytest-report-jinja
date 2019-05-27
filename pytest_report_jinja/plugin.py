@@ -15,13 +15,14 @@ def pytest_addoption(parser):
                     help='filename of the report output.')
     group.addoption('--capabilities', action='store', dest='browser_capabilities',
                     metavar='path', default=None,
-                    help='filename of the browser capabilities.')
+                    help='filename of the browser capabilities.', required=True)
 
 def pytest_configure(config):
     templatepath = config.option.jinja2_template
     # TODO- check if the template exists at configure time
     outputpath = config.option.jinja2_output
     capabilities = config.option.browser_capabilities
+    print(capabilities)
     # prevent opening htmlpath on slave nodes (xdist)
     if templatepath and not hasattr(config, 'slaveinput'):
         config._jinjareport = JinjaReport(templatepath, outputpath, capabilities, config)
@@ -58,8 +59,12 @@ class JinjaReport(object):
             'passed': self.passed,
             'skipped': self.skipped,
             'xfailed': self.xfailed,
-            'xpassed': self.xpassed
+            'xpassed': self.xpassed,
+            'rerun': self.rerun
         }
+        self.function_statuses = []
+        self.function_items = []
+        self.date_time = datetime.now()
 
     def _metadata(self, session):
         mapping = {
@@ -80,10 +85,12 @@ class JinjaReport(object):
                     report.state = "xpassed"
                     self.xpassed += 1
                     self.report_info['xpassed'] = self.xpassed
+                    self.function_statuses.append('passed')
                 else:
                     report.state = "passed"
                     self.passed += 1
                     self.report_info['passed'] = self.passed
+                    self.function_statuses.append('passed')
             else:
                 report.state = "passed"
         elif report.failed:
@@ -92,34 +99,65 @@ class JinjaReport(object):
                     report.state = "xpassed"  # pytest < 3.0 marked xpasses as failures
                     self.xpassed += 1
                     self.report_info['xpassed'] = self.xpassed
+                    self.function_statuses.append('passed')
                 else:
                     report.state = "failed"
                     self.failed += 1
                     self.report_info['failed'] = self.failed
+                    self.function_statuses.append('failed')
             else:
                 report.state = "error"
                 self.errors += 1
                 self.report_info['error'] = self.errors
+                self.function_statuses.append('failed')
         elif report.skipped:
             if hasattr(report, "wasxfail"):
                 report.state = "xfailed"
                 self.xfailed += 1
                 self.report_info['xfailed'] = self.xfailed
+                self.function_statuses.append('failed')
             else:
                 report.state = "skipped"
                 self.skipped += 1
                 self.report_info['skipped'] = self.skipped
+                self.function_statuses.append('passed')
         else:
             report.state = "rerun"
             self.rerun += 1
+            self.report_info['rerun'] = self.rerun
 
         if report.nodeid not in self.items:
             self.items[report.nodeid] = []
         self.items[report.nodeid].append(report)
 
+
+    def pytest_runtest_call(self, item):
+        self.function_items.append(item)
+
+    def bake_dict_tests(self):
+        tmp_dict = {}
+        human_dict_tests = {}
+        for i in self.function_items:
+            tmp_dict[i.function.__doc__] = []
+
+        dict_tests = dict(zip(self.function_items, self.function_statuses))
+
+        for func in self.function_items:
+            for key in dict_tests:
+                if func.function.__doc__ == key.function.__doc__:
+                    tmp_dict[func.function.__doc__].append(dict_tests[key])
+
+        for key in tmp_dict:
+            if 'failed' in tmp_dict[key]:
+                human_dict_tests[key] = 'failed'
+            else:
+                human_dict_tests[key] = 'passed'
+
+        return human_dict_tests
+
     def pytest_itemcollected(self, item):
         self.function_test_info[item.function.__name__] = item
-
+        
     def pytest_sessionstart(self, session):
         self.start_time = datetime.now()
         self.testrun_info["Start"] = self.start_time
@@ -153,7 +191,9 @@ class JinjaReport(object):
                 testrun=self.testrun_info,
                 function_test_info=self.function_test_info,
                 capabilities=self.capabilities,
-                report_info=self.report_info
+                report_info=self.report_info,
+                human_tests=self.bake_dict_tests(),
+                datatime_report=self.date_time.strftime("%d.%m.%Y %H-%M")
             )
 
             with open(self.outputpath, "w", encoding="utf-8") as of:
