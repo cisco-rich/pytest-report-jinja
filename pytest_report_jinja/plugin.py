@@ -5,7 +5,6 @@ import os
 from collections import OrderedDict
 from datetime import datetime
 
-
 def pytest_addoption(parser):
     group = parser.getgroup('reporting')
     group.addoption('--jinja2-template', action='store', dest='jinja2_template',
@@ -53,6 +52,14 @@ class JinjaReport(object):
         self.function_test_info = {}
         self.testrun_info = {}
         self.capabilities = capabilities
+        self.report_info = {
+            'errors': self.errors,
+            'failed': self.failed,
+            'passed': self.passed,
+            'skipped': self.skipped,
+            'xfailed': self.xfailed,
+            'xpassed': self.xpassed
+        }
 
     def _metadata(self, session):
         mapping = {
@@ -72,9 +79,11 @@ class JinjaReport(object):
                 if hasattr(report, "wasxfail"):
                     report.state = "xpassed"
                     self.xpassed += 1
+                    self.report_info['xpassed'] = self.xpassed
                 else:
                     report.state = "passed"
                     self.passed += 1
+                    self.report_info['passed'] = self.passed
             else:
                 report.state = "passed"
         elif report.failed:
@@ -82,19 +91,24 @@ class JinjaReport(object):
                 if hasattr(report, "wasxfail"):
                     report.state = "xpassed"  # pytest < 3.0 marked xpasses as failures
                     self.xpassed += 1
+                    self.report_info['xpassed'] = self.xpassed
                 else:
                     report.state = "failed"
                     self.failed += 1
+                    self.report_info['failed'] = self.failed
             else:
                 report.state = "error"
                 self.errors += 1
+                self.report_info['error'] = self.errors
         elif report.skipped:
             if hasattr(report, "wasxfail"):
                 report.state = "xfailed"
                 self.xfailed += 1
+                self.report_info['xfailed'] = self.xfailed
             else:
                 report.state = "skipped"
                 self.skipped += 1
+                self.report_info['skipped'] = self.skipped
         else:
             report.state = "rerun"
             self.rerun += 1
@@ -138,7 +152,8 @@ class JinjaReport(object):
                 metadata=self._metadata(session),
                 testrun=self.testrun_info,
                 function_test_info=self.function_test_info,
-                capabilities=self.capabilities
+                capabilities=self.capabilities,
+                report_info=self.report_info
             )
 
             with open(self.outputpath, "w", encoding="utf-8") as of:
