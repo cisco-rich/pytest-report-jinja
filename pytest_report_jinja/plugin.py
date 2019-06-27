@@ -15,7 +15,7 @@ def pytest_addoption(parser):
                     help='filename of the report output.')
     group.addoption('--capabilities', action='store', dest='browser_capabilities',
                     metavar='path', default=None,
-                    help='filename of the browser capabilities.', required=True)
+                    help='filename of the browser capabilities.')
 
 def pytest_configure(config):
     templatepath = config.option.jinja2_template
